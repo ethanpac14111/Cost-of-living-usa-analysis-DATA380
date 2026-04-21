@@ -62,5 +62,5 @@ Outliers identified in food and childcare costs
 
 PCA and NMF reveal underlying structure in cost components
 
-Author
+Author,
 Ethan Pac

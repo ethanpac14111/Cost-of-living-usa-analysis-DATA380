@@ -1,1 +1,410 @@
+import pandas as pd
+import matplotlib.pyplot as plt
+import seaborn as sns
+from sklearn.preprocessing import StandardScaler
+from sklearn.preprocessing import MinMaxScaler
+from sklearn.decomposition import PCA
+from sklearn.decomposition import NMF
+import plotly.express as px
+from mpl_toolkits.mplot3d import Axes3D
 
+# Load the dataset
+df = pd.read_csv(r"C:\Users\pace\Downloads\cost_of_living_us.csv")
+
+# Clean the data
+df = df.dropna()
+
+# Drop case_id because the assignment says to skip it
+df = df.drop("case_id", axis=1)
+
+# Check the data
+print(df.shape)
+print(df.head())
+print(df.info())
+
+# Separate variables
+categorical_vars = ["state", "isMetro", "areaname", "county", "family_member_count"]
+
+quantitative_vars = [
+    "housing_cost",
+    "food_cost",
+    "transportation_cost",
+    "healthcare_cost",
+    "other_necessities_cost",
+    "childcare_cost",
+    "taxes",
+    "total_cost",
+    "median_family_income"
+]
+
+print("Categorical variables:")
+print(categorical_vars)
+
+print("\nQuantitative variables:")
+print(quantitative_vars)
+
+# Summary statistics
+print("\nSummary statistics:")
+print(df[quantitative_vars].describe())
+
+# Missing values check
+print("\nMissing values:")
+print(df.isnull().sum())
+
+# Summary table by state
+state_summary = df.groupby("state")[quantitative_vars].mean()
+print("\nAverage cost values by state:")
+print(state_summary)
+
+# Part 3: Graphs by State
+state_variables = [
+    "transportation_cost",
+    "healthcare_cost",
+    "childcare_cost",
+    "taxes",
+    "median_family_income"
+]
+
+for var in state_variables:
+    state_avg = df.groupby("state")[var].mean().sort_values()
+
+    plt.figure(figsize=(11, 5))
+    plt.bar(state_avg.index, state_avg.values)
+    plt.title(var.replace("_", " ").title() + " by State")
+    plt.xlabel("State")
+    plt.ylabel("Average Amount ($)")
+    plt.xticks(rotation=90)
+    plt.tight_layout()
+    plt.show()
+
+# Part 3: Family Member Count Graph
+family_counts = df["family_member_count"].value_counts().sort_index()
+
+plt.figure(figsize=(8,5))
+plt.bar(family_counts.index, family_counts.values)
+plt.title("Number of Records by Family Type")
+plt.xlabel("Family Type")
+plt.ylabel("Count")
+plt.ylim(0, max(family_counts.values) + 200)
+plt.tight_layout()
+plt.show()
+
+# Part 4: Group by State Using Color
+state_table = df.groupby("state")[quantitative_vars].mean()
+
+scaler = StandardScaler()
+scaled_data = scaler.fit_transform(state_table)
+
+scaled_df = pd.DataFrame(
+    scaled_data,
+    index=state_table.index,
+    columns=state_table.columns
+)
+
+plt.figure(figsize=(12,8))
+
+sns.heatmap(
+    scaled_df,
+    cmap="coolwarm",
+    linewidths=0.5,
+    cbar_kws={"label": "Relative Value"}
+)
+
+plt.title("Average Costs by State", fontsize=14)
+plt.xlabel("Variables")
+plt.ylabel("State")
+plt.xticks(rotation=45)
+plt.yticks(rotation=0)
+plt.tight_layout()
+plt.show()
+
+# Part 5: Choropleth Map Transportation Cost by State
+state_transport = df.groupby("state")["transportation_cost"].mean().reset_index()
+
+fig = px.choropleth(
+    state_transport,
+    locations="state",
+    locationmode="USA-states",
+    color="transportation_cost",
+    color_continuous_scale="Blues",
+    scope="usa",
+    title="Average Transportation Cost by State"
+)
+
+fig.update_layout(margin={"r":0, "t":40, "l":0, "b":0})
+
+fig.show()
+
+fig.write_html("transportation_choropleth.html")
+
+# Part 6: Scatter Plots
+# Part 6: Scatter Plots (Improved Legend Placement)
+pairs = [
+    ("total_cost", "transportation_cost"),
+    ("childcare_cost", "taxes"),
+    ("median_family_income", "taxes"),
+    ("housing_cost", "taxes")
+]
+
+for x, y in pairs:
+    plt.figure(figsize=(9,6))
+
+    sns.scatterplot(
+        data=df,
+        x=x,
+        y=y,
+        hue="state",
+        alpha=0.6,
+        s=35
+    )
+
+    plt.title(f"{x.replace('_',' ').title()} vs {y.replace('_',' ').title()}", fontsize=14)
+    plt.xlabel(x.replace("_", " ").title() + " ($)")
+    plt.ylabel(y.replace("_", " ").title() + " ($)")
+
+    plt.legend(
+        title="State",
+        bbox_to_anchor=(0.5, -0.2),
+        loc="upper center",
+        ncol=6,           # spreads legend horizontally
+        fontsize=7
+    )
+
+    plt.grid(alpha=0.3)
+    plt.tight_layout()
+    plt.show()
+
+# Part 7: Top 12 UNIQUE Counties by Childcare Cost
+top_childcare = (
+    df.sort_values(by="childcare_cost", ascending=False)
+    .drop_duplicates(subset=["county", "state"])
+    .head(12)
+)
+
+print("Top 12 Counties by Childcare Cost:")
+print(top_childcare[["county", "state", "childcare_cost"]])
+
+# Part 8: Top 12 UNIQUE Counties by Taxes
+top_taxes = (
+    df.sort_values(by="taxes", ascending=False)
+    .drop_duplicates(subset=["county", "state"])
+    .head(12)
+)
+
+print("Top 12 Counties by Taxes:")
+print(top_taxes[["county", "state", "taxes"]])
+
+# Part 9: Correlation Matrix
+corr = df[quantitative_vars].corr()
+
+plt.figure(figsize=(10,7))
+
+sns.heatmap(
+    corr,
+    annot=True,
+    cmap="coolwarm",
+    fmt=".2f",
+    linewidths=0.5,
+    square=True,
+    cbar_kws={"label": "Correlation"}
+)
+
+plt.title("Correlation Matrix of Cost Variables", fontsize=14)
+plt.xticks(rotation=45)
+plt.yticks(rotation=0)
+plt.tight_layout()
+plt.show()
+
+# Part 10: Regression Line Total Cost vs Taxes
+plt.figure(figsize=(8,6))
+
+sns.regplot(
+    data=df,
+    x="taxes",
+    y="total_cost",
+    scatter_kws={"alpha":0.4},
+    line_kws={"color":"red", "linewidth":2}
+)
+
+plt.title("Total Cost vs Taxes", fontsize=14)
+plt.xlabel("Taxes ($)")
+plt.ylabel("Total Cost ($)")
+plt.grid(alpha=0.3)
+plt.tight_layout()
+plt.show()
+
+# Part 11: Outliers for Food Cost by State
+plt.figure(figsize=(12,6))
+
+sns.boxplot(
+    data=df,
+    x="state",
+    y="food_cost",
+    showfliers=True
+)
+
+plt.xticks(rotation=90)
+plt.title("Food Cost Distribution by State", fontsize=14)
+plt.xlabel("State")
+plt.ylabel("Food Cost ($)")
+plt.grid(axis="y", alpha=0.3)
+plt.tight_layout()
+plt.show()
+
+# Part 12: Bubble Plot for Food Cost and Taxes
+plt.figure(figsize=(8,6))
+
+sns.scatterplot(
+    data=df,
+    x="food_cost",
+    y="taxes",
+    size="childcare_cost",
+    hue="isMetro",
+    alpha=0.5,
+    sizes=(20, 250)
+)
+
+plt.title("Food Cost vs Taxes Bubble Plot", fontsize=14)
+plt.xlabel("Food Cost ($)")
+plt.ylabel("Taxes ($)")
+plt.legend(title="Metro Area", bbox_to_anchor=(1.05, 1), loc="upper left")
+plt.grid(alpha=0.3)
+plt.tight_layout()
+plt.show()
+
+# Part 13: Bubble Plot for Housing Cost and Taxes
+plt.figure(figsize=(9,6))
+
+sns.scatterplot(
+    data=df,
+    x="housing_cost",
+    y="taxes",
+    size="transportation_cost",
+    hue="state",
+    alpha=0.5,
+    sizes=(20, 250),
+    legend=False
+)
+
+plt.title("Housing Cost vs Taxes Bubble Plot", fontsize=14)
+plt.xlabel("Housing Cost ($)")
+plt.ylabel("Taxes ($)")
+plt.grid(alpha=0.3)
+plt.tight_layout()
+plt.show()
+
+# Part 14: 3D Plot for Transportation Healthcare and Childcare
+fig = plt.figure(figsize=(8,6))
+ax = fig.add_subplot(111, projection="3d")
+
+ax.scatter(
+    df["transportation_cost"],
+    df["healthcare_cost"],
+    df["childcare_cost"],
+    alpha=0.4
+)
+
+ax.set_title("3D Plot of Transportation, Healthcare, and Childcare")
+ax.set_xlabel("Transportation Cost ($)")
+ax.set_ylabel("Healthcare Cost ($)")
+ax.set_zlabel("Childcare Cost ($)")
+
+plt.tight_layout()
+plt.show()
+
+# Part 15: 3D Plot for Childcare Taxes Median Family Income and State
+fig = plt.figure(figsize=(8,6))
+ax = fig.add_subplot(111, projection="3d")
+
+state_colors = df["state"].astype("category").cat.codes
+
+ax.scatter(
+    df["childcare_cost"],
+    df["taxes"],
+    df["median_family_income"],
+    c=state_colors,
+    alpha=0.4
+)
+
+ax.set_title("3D Plot of Childcare, Taxes, and Income")
+ax.set_xlabel("Childcare Cost ($)")
+ax.set_ylabel("Taxes ($)")
+ax.set_zlabel("Median Family Income ($)")
+
+plt.tight_layout()
+plt.show()
+
+# Part 16: PCA with 3 Components
+from sklearn.decomposition import PCA
+from sklearn.preprocessing import StandardScaler
+
+X = df[quantitative_vars]
+
+scaler = StandardScaler()
+X_scaled = scaler.fit_transform(X)
+
+pca = PCA(n_components=3)
+pca_result = pca.fit_transform(X_scaled)
+
+# create dataframe (THIS is what you were missing or not running)
+pca_df = pd.DataFrame(pca_result, columns=["PC1", "PC2", "PC3"])
+
+# now plot
+plt.figure(figsize=(8,6))
+
+plt.scatter(pca_df["PC1"], pca_df["PC2"], alpha=0.4)
+
+plt.title("PCA Plot: Cost Structure")
+plt.xlabel("Component 1 (Overall Cost Level)")
+plt.ylabel("Component 2 (Cost Differences)")
+
+plt.text(2, 1, "Higher Cost Areas", fontsize=10)
+plt.text(-2, -1, "Lower Cost Areas", fontsize=10)
+
+plt.grid(True)
+plt.tight_layout()
+plt.show()
+
+# Part 17: NMF with 3 Components
+from sklearn.decomposition import NMF
+from sklearn.preprocessing import MinMaxScaler
+
+X = df[quantitative_vars]
+
+# NMF needs positive values, so I scaled the data from 0 to 1
+nmf_scaler = MinMaxScaler()
+X_nmf = nmf_scaler.fit_transform(X)
+
+nmf = NMF(n_components=3, random_state=1, max_iter=1000)
+nmf_result = nmf.fit_transform(X_nmf)
+
+nmf_df = pd.DataFrame(
+    nmf_result,
+    columns=["Component 1", "Component 2", "Component 3"]
+)
+
+print("NMF Results:")
+print(nmf_df.head())
+
+# sample the data so the graph is easier to read
+sample = nmf_df.sample(2000, random_state=1)
+
+plt.figure(figsize=(8,6))
+
+plt.scatter(
+    sample["Component 1"],
+    sample["Component 2"],
+    alpha=0.4,
+    s=15
+)
+
+plt.title("NMF Plot: Cost Patterns")
+plt.xlabel("Component 1 (Overall Cost Intensity)")
+plt.ylabel("Component 2 (Cost Pattern Differences)")
+
+plt.text(0.04, 0.03, "Higher Cost Areas", fontsize=10)
+plt.text(0.005, 0.12, "Different Cost Mix", fontsize=10)
+
+plt.grid(alpha=0.3)
+plt.tight_layout()
+plt.show()
